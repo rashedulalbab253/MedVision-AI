@@ -109,10 +109,3 @@ It is **not** a medical device and must **not** be used for diagnosis or clinica
 
 ---
 
-## Author
-
-Leya Glazer
-
-Biomedical Engineering + Computer Science
-
-University of Texas at Dallas
