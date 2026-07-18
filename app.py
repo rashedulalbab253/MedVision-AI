@@ -1031,5 +1031,5 @@ else:
 st.divider()
 st.caption(
     "MedVision AI · Biomedical Engineering & Computer Vision Project · "
-    "Educational Research Use Only"
+    "Educational Research Use Only. © Rashedul Albab. All rights reserved."
 )
