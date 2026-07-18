@@ -109,3 +109,10 @@ It is **not** a medical device and must **not** be used for diagnosis or clinica
 
 ---
 
+## Author
+
+**Rashedul Albab**
+
+Machine Learning & Computer Vision Researcher
+
+[GitHub: rashedulalbab253](https://github.com/rashedulalbab253)
