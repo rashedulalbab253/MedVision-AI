@@ -11,8 +11,9 @@ import streamlit as st
 import torch
 import torch.nn as nn
 from PIL import Image, UnidentifiedImageError
-from pytorch_grad_cam import GradCAM
-from pytorch_grad_cam.utils.image import show_cam_on_image
+import matplotlib
+import matplotlib.cm as cm
+import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.models import resnet18
 
@@ -287,14 +288,48 @@ def create_gradcam(
     model: nn.Module,
     input_tensor: torch.Tensor,
 ) -> np.ndarray:
-    with GradCAM(
-        model=model,
-        target_layers=[model.layer4[-1]],
-    ) as cam:
-        return cam(
-            input_tensor=input_tensor,
-            targets=None,
-        )[0]
+    model.eval()
+    activations: list[torch.Tensor] = []
+    gradients: list[torch.Tensor] = []
+
+    def forward_hook(_module: nn.Module, _input: Any, output: torch.Tensor) -> None:
+        activations.append(output)
+
+    def backward_hook(_module: nn.Module, _grad_input: Any, grad_output: tuple[torch.Tensor, ...]) -> None:
+        gradients.append(grad_output[0])
+
+    target_layer = model.layer4[-1]
+    handle_fwd = target_layer.register_forward_hook(forward_hook)
+    handle_bwd = target_layer.register_full_backward_hook(backward_hook)
+
+    try:
+        input_var = input_tensor.clone().detach().requires_grad_(True)
+        model.zero_grad()
+        output = model(input_var)
+        score = output[0, 0] if output.ndim > 1 and output.shape[1] == 1 else output[0]
+        score.backward()
+
+        act = activations[0]
+        grad = gradients[0]
+        weights = torch.mean(grad, dim=(2, 3), keepdim=True)
+        cam = torch.sum(weights * act, dim=1, keepdim=True)
+        cam = F.relu(cam)
+        cam = F.interpolate(
+            cam,
+            size=(input_tensor.shape[2], input_tensor.shape[3]),
+            mode="bilinear",
+            align_corners=False,
+        )
+        cam_np = cam.squeeze().detach().cpu().numpy()
+        cam_min, cam_max = float(cam_np.min()), float(cam_np.max())
+        if cam_max > cam_min:
+            cam_np = (cam_np - cam_min) / (cam_max - cam_min)
+        else:
+            cam_np = np.zeros_like(cam_np)
+        return cam_np
+    finally:
+        handle_fwd.remove()
+        handle_bwd.remove()
 
 
 def create_overlay(
@@ -302,22 +337,10 @@ def create_overlay(
     heatmap: np.ndarray,
     intensity: float,
 ) -> np.ndarray:
-    overlay = show_cam_on_image(
-        image_array,
-        heatmap,
-        use_rgb=True,
-    ).astype(np.float32) / 255.0
-
-    blended = (
-        (1.0 - intensity) * image_array
-        + intensity * overlay
-    )
-
-    return np.clip(
-        blended * 255,
-        0,
-        255,
-    ).astype(np.uint8)
+    cmap = matplotlib.colormaps.get_cmap("jet") if hasattr(matplotlib, "colormaps") else cm.get_cmap("jet")
+    colored_heatmap = cmap(heatmap)[:, :, :3]
+    blended = (1.0 - intensity) * image_array + intensity * colored_heatmap
+    return np.clip(blended * 255, 0, 255).astype(np.uint8)
 
 
 # ============================================================

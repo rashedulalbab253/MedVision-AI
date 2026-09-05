@@ -5,7 +5,5 @@ torchvision
 numpy<2.0.0
 pandas
 Pillow
-opencv-python-headless
-grad-cam==1.5.5
 scikit-learn
 matplotlib
